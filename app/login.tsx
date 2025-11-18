@@ -1,20 +1,38 @@
 import { useState } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { loginAsync } from '@/store';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  
+  const dispatch = useAppDispatch();
+  const { isLoading } = useAppSelector((state) => state.auth);
   const tintColor = useThemeColor({}, 'tint');
   const textColor = useThemeColor({}, 'text');
   const backgroundColor = useThemeColor({}, 'background');
 
-  const handleLogin = () => {
-    // TODO: Implement login logic
-    console.log('Login:', { email, password });
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    setError('');
+    try {
+      await dispatch(loginAsync({ email, password })).unwrap();
+      router.replace('/home');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      setError(errorMessage);
+      Alert.alert('Login Error', errorMessage);
+    }
   };
 
   return (
@@ -81,13 +99,28 @@ export default function LoginScreen() {
               </ThemedText>
             </TouchableOpacity>
 
+            {error ? (
+              <View style={styles.errorContainer}>
+                <ThemedText style={styles.errorText}>{error}</ThemedText>
+              </View>
+            ) : null}
+
             <TouchableOpacity
-              style={[styles.loginButton, { backgroundColor: tintColor }]}
+              style={[
+                styles.loginButton,
+                { backgroundColor: tintColor },
+                isLoading && styles.loginButtonDisabled,
+              ]}
               onPress={handleLogin}
-              activeOpacity={0.8}>
-              <ThemedText style={[styles.loginButtonText, { color: '#fff' }]}>
-                Sign In
-              </ThemedText>
+              activeOpacity={0.8}
+              disabled={isLoading}>
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <ThemedText style={[styles.loginButtonText, { color: '#fff' }]}>
+                  Sign In
+                </ThemedText>
+              )}
             </TouchableOpacity>
 
             <View style={styles.signUpContainer}>
@@ -179,6 +212,20 @@ const styles = StyleSheet.create({
   signUpLink: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  errorContainer: {
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#FFE5E5',
+  },
+  errorText: {
+    color: '#D32F2F',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
   },
 });
 
