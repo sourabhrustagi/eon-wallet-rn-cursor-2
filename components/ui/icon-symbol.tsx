@@ -18,6 +18,9 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'lock.shield.fill': 'security',
+  'hand.tap.fill': 'touch-app',
+  'bolt.fill': 'bolt',
 } as IconMapping;
 
 /**
