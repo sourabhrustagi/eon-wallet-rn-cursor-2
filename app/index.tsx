@@ -1,47 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, TouchableOpacity, ScrollView, Dimensions, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { router, useSegments } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useAppSelector } from '@/store';
+import { useAppSelector } from '@/core/store';
+import { useSlides } from '@/features/welcome';
+import { IconSymbol, ThemedText, ThemedView } from '@/shared/components';
+import { useThemeColor } from '@/shared/hooks';
+import { router } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Dimensions, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-interface Slide {
-  id: number;
-  title: string;
-  description: string;
-  icon: string;
-}
-
-const slides: Slide[] = [
-  {
-    id: 1,
-    title: 'Secure & Safe',
-    description: 'Your crypto assets are protected with bank-level security and encryption',
-    icon: 'lock.shield.fill',
-  },
-  {
-    id: 2,
-    title: 'Easy to Use',
-    description: 'Manage your digital assets with an intuitive and user-friendly interface',
-    icon: 'hand.tap.fill',
-  },
-  {
-    id: 3,
-    title: 'Fast Transactions',
-    description: 'Send and receive crypto instantly with low fees and high speed',
-    icon: 'bolt.fill',
-  },
-];
 
 export default function WelcomeScreen() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const tintColor = useThemeColor({}, 'tint');
   const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const { slides, isLoading, error } = useSlides();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -62,6 +34,32 @@ export default function WelcomeScreen() {
     setCurrentSlide(index);
   };
 
+  if (isLoading) {
+    return (
+      <ThemedView style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={tintColor} />
+      </ThemedView>
+    );
+  }
+
+  if (error || slides.length === 0) {
+    return (
+      <ThemedView style={[styles.container, styles.centerContent]}>
+        <ThemedText style={styles.errorText}>
+          {error || 'No slides available'}
+        </ThemedText>
+        <TouchableOpacity
+          style={[styles.primaryButton, { backgroundColor: tintColor, marginTop: 20 }]}
+          onPress={() => router.push('/login')}
+          activeOpacity={0.8}>
+          <ThemedText style={[styles.buttonText, { color: '#fff' }]}>
+            Continue to Login
+          </ThemedText>
+        </TouchableOpacity>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
@@ -77,7 +75,7 @@ export default function WelcomeScreen() {
             <View style={styles.slideContent}>
               <View style={[styles.iconContainer, { backgroundColor: tintColor + '20' }]}>
                 <IconSymbol
-                  name={slide.icon as 'lock.shield.fill' | 'hand.tap.fill' | 'bolt.fill'}
+                  name={slide.icon as any}
                   size={64}
                   color={tintColor}
                 />
@@ -216,6 +214,15 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginHorizontal: 24,
   },
 });
 

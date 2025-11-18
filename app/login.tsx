@@ -1,37 +1,109 @@
-import { useState } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { useState, useCallback } from 'react';
+import { StyleSheet, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { loginAsync } from '@/store';
+import { ThemedText, ThemedView } from '@/shared/components';
+import { useThemeColor } from '@/shared/hooks';
+import { useAppDispatch, useAppSelector } from '@/core/store';
+import { loginAsync } from '@/features/auth';
+import { validateEmail, validatePassword, validateLoginForm } from '@/shared/utils/validation';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [generalError, setGeneralError] = useState('');
+  const [touched, setTouched] = useState({ email: false, password: false });
   
   const dispatch = useAppDispatch();
   const { isLoading } = useAppSelector((state) => state.auth);
   const tintColor = useThemeColor({}, 'tint');
   const textColor = useThemeColor({}, 'text');
   const backgroundColor = useThemeColor({}, 'background');
+  const errorColor = '#D32F2F';
+
+  const handleEmailChange = useCallback((text: string) => {
+    setEmail(text);
+    setGeneralError('');
+    
+    if (touched.email) {
+      const validation = validateEmail(text);
+      setEmailError(validation.isValid ? '' : validation.error || '');
+    }
+  }, [touched.email]);
+
+  const handlePasswordChange = useCallback((text: string) => {
+    setPassword(text);
+    setGeneralError('');
+    
+    if (touched.password) {
+      const validation = validatePassword(text);
+      setPasswordError(validation.isValid ? '' : validation.error || '');
+    }
+  }, [touched.password]);
+
+  const handleEmailBlur = useCallback(() => {
+    setTouched(prev => ({ ...prev, email: true }));
+    const validation = validateEmail(email);
+    setEmailError(validation.isValid ? '' : validation.error || '');
+  }, [email]);
+
+  const handlePasswordBlur = useCallback(() => {
+    setTouched(prev => ({ ...prev, password: true }));
+    const validation = validatePassword(password);
+    setPasswordError(validation.isValid ? '' : validation.error || '');
+  }, [password]);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter both email and password');
+    // Mark all fields as touched
+    setTouched({ email: true, password: true });
+    
+    // Clear previous errors
+    setGeneralError('');
+    setEmailError('');
+    setPasswordError('');
+
+    // Validate form
+    const validation = validateLoginForm(email, password);
+    if (!validation.isValid) {
+      // Validate individual fields to show specific errors
+      const emailValidation = validateEmail(email);
+      const passwordValidation = validatePassword(password);
+      
+      if (!emailValidation.isValid) {
+        setEmailError(emailValidation.error || '');
+      }
+      if (!passwordValidation.isValid) {
+        setPasswordError(passwordValidation.error || '');
+      }
+      
+      setGeneralError(validation.error || 'Please fix the errors above');
       return;
     }
 
-    setError('');
     try {
-      await dispatch(loginAsync({ email, password })).unwrap();
+      await dispatch(loginAsync({ email: email.trim(), password })).unwrap();
       router.replace('/home');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Login failed. Please try again.';
-      setError(errorMessage);
-      Alert.alert('Login Error', errorMessage);
+    } catch (err: any) {
+      // Handle different error types
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      } else if (err?.payload) {
+        errorMessage = err.payload;
+      }
+
+      // Set appropriate error
+      if (errorMessage.toLowerCase().includes('email')) {
+        setEmailError(errorMessage);
+      } else if (errorMessage.toLowerCase().includes('password')) {
+        setPasswordError(errorMessage);
+      } else {
+        setGeneralError(errorMessage);
+      }
     }
   };
 
@@ -52,56 +124,79 @@ export default function LoginScreen() {
 
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Email</ThemedText>
+              <View style={styles.labelContainer}>
+                <ThemedText style={styles.label}>Email</ThemedText>
+                {emailError ? <ThemedText style={styles.required}> *</ThemedText> : null}
+              </View>
               <TextInput
                 style={[
                   styles.input,
                   {
                     color: textColor,
-                    borderColor: textColor + '30',
+                    borderColor: emailError ? errorColor : textColor + '30',
                     backgroundColor: backgroundColor,
+                    borderWidth: emailError ? 2 : 1,
                   },
                 ]}
                 placeholder="Enter your email"
                 placeholderTextColor={textColor + '60'}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={handleEmailChange}
+                onBlur={handleEmailBlur}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
+                autoCorrect={false}
+                editable={!isLoading}
               />
+              {emailError ? (
+                <ThemedText style={styles.fieldError}>{emailError}</ThemedText>
+              ) : null}
             </View>
 
             <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Password</ThemedText>
+              <View style={styles.labelContainer}>
+                <ThemedText style={styles.label}>Password</ThemedText>
+                {passwordError ? <ThemedText style={styles.required}> *</ThemedText> : null}
+              </View>
               <TextInput
                 style={[
                   styles.input,
                   {
                     color: textColor,
-                    borderColor: textColor + '30',
+                    borderColor: passwordError ? errorColor : textColor + '30',
                     backgroundColor: backgroundColor,
+                    borderWidth: passwordError ? 2 : 1,
                   },
                 ]}
                 placeholder="Enter your password"
                 placeholderTextColor={textColor + '60'}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={handlePasswordChange}
+                onBlur={handlePasswordBlur}
                 secureTextEntry
                 autoCapitalize="none"
                 autoComplete="password"
+                autoCorrect={false}
+                editable={!isLoading}
               />
+              {passwordError ? (
+                <ThemedText style={styles.fieldError}>{passwordError}</ThemedText>
+              ) : null}
             </View>
 
-            <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity 
+              style={styles.forgotPassword}
+              disabled={isLoading}
+              activeOpacity={0.7}>
               <ThemedText type="link" style={styles.forgotPasswordText}>
                 Forgot Password?
               </ThemedText>
             </TouchableOpacity>
 
-            {error ? (
+            {generalError ? (
               <View style={styles.errorContainer}>
-                <ThemedText style={styles.errorText}>{error}</ThemedText>
+                <ThemedText style={styles.errorText}>{generalError}</ThemedText>
               </View>
             ) : null}
 
@@ -109,11 +204,11 @@ export default function LoginScreen() {
               style={[
                 styles.loginButton,
                 { backgroundColor: tintColor },
-                isLoading && styles.loginButtonDisabled,
+                (isLoading || !!emailError || !!passwordError) && styles.loginButtonDisabled,
               ]}
               onPress={handleLogin}
               activeOpacity={0.8}
-              disabled={isLoading}>
+              disabled={isLoading || !!emailError || !!passwordError}>
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -169,18 +264,32 @@ const styles = StyleSheet.create({
   inputContainer: {
     marginBottom: 20,
   },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
+  },
+  required: {
+    color: '#D32F2F',
+    fontSize: 14,
+    fontWeight: '600',
   },
   input: {
     width: '100%',
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
-    borderWidth: 1,
     fontSize: 16,
+  },
+  fieldError: {
+    color: '#D32F2F',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   forgotPassword: {
     alignSelf: 'flex-end',

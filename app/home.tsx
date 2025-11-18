@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, ScrollView } from 'react-native';
 import { router } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { logout } from '@/store';
+import { ThemedText, ThemedView } from '@/shared/components';
+import { useThemeColor } from '@/shared/hooks';
+import { useAppDispatch, useAppSelector } from '@/core/store';
+import { logout } from '@/features/auth';
 
 export default function HomeScreen() {
   const dispatch = useAppDispatch();

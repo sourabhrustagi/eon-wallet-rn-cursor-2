@@ -1,11 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { persistStore, persistReducer } from 'redux-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import authReducer from './authSlice';
+import { authReducer } from '@/features/auth';
 
+// Only persist user data, not token (token is in secure storage)
 const authPersistConfig = {
   key: 'auth',
   storage: AsyncStorage,
+  whitelist: ['user', 'isAuthenticated'], // Don't persist token
 };
 
 const persistedAuthReducer = persistReducer(authPersistConfig, authReducer);
