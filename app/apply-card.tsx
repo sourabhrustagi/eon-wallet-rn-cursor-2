@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,30 +12,86 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import {
+  clearError,
+  setOtherPurpose,
+  submitApplication,
+  toggleCardUsage,
+  togglePurpose,
+} from '../store/slices/cardApplicationSlice';
 
 export default function ApplyCardScreen() {
-  const [selectedCardUsage, setSelectedCardUsage] = useState<string[]>([]);
-  const [selectedPurposes, setSelectedPurposes] = useState<string[]>([]);
-  const [otherPurpose, setOtherPurpose] = useState('');
+  const dispatch = useAppDispatch();
+  const {
+    selectedCardUsage,
+    selectedPurposes,
+    otherPurpose,
+    isLoading,
+    error,
+    applicationData,
+  } = useAppSelector((state) => state.cardApplication);
 
-  const toggleCardUsage = (usage: string) => {
-    setSelectedCardUsage((prev) =>
-      prev.includes(usage) ? prev.filter((item) => item !== usage) : [...prev, usage]
-    );
-  };
+  // Show success alert when application is submitted
+  useEffect(() => {
+    if (applicationData && !isLoading) {
+      Alert.alert(
+        'Success',
+        `Card application submitted successfully!\n\nApplication ID: ${applicationData.applicationId}\nStatus: ${applicationData.status}\nEstimated Processing Time: ${applicationData.estimatedProcessingTime}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back or to success screen
+              router.back();
+            },
+          },
+        ]
+      );
+    }
+  }, [applicationData, isLoading]);
 
-  const togglePurpose = (purpose: string) => {
-    setSelectedPurposes((prev) =>
-      prev.includes(purpose) ? prev.filter((item) => item !== purpose) : [...prev, purpose]
-    );
-  };
+  // Show error alert when error occurs
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Error', error);
+    }
+  }, [error]);
 
-  const handleNext = () => {
-    // Handle next step
-    console.log('Card Usage:', selectedCardUsage);
-    console.log('Purposes:', selectedPurposes);
-    console.log('Other Purpose:', otherPurpose);
-    // Navigate to next screen or submit
+  const handleNext = async () => {
+    // Reset error
+    dispatch(clearError());
+
+    // Validation
+    if (selectedCardUsage.length === 0) {
+      Alert.alert('Validation Error', 'Please select at least one card usage option (Online Shopping or Overseas Use)');
+      return;
+    }
+
+    if (selectedPurposes.length === 0) {
+      Alert.alert('Validation Error', 'Please select at least one purpose for transaction');
+      return;
+    }
+
+    if (selectedPurposes.includes('Others') && !otherPurpose.trim()) {
+      Alert.alert('Validation Error', 'Please specify the purpose when selecting "Others"');
+      return;
+    }
+
+    // Prepare payload
+    const payload = {
+      cardUsage: selectedCardUsage,
+      purposes: selectedPurposes,
+      ...(selectedPurposes.includes('Others') && { otherPurpose: otherPurpose.trim() }),
+    };
+
+    // Dispatch async thunk
+    const result = await dispatch(submitApplication(payload));
+    
+    // Handle result if needed (though useEffect will handle the success case)
+    if (submitApplication.rejected.match(result)) {
+      // Error is already handled by the slice and useEffect
+    }
   };
 
   return (
@@ -57,7 +115,7 @@ export default function ApplyCardScreen() {
               styles.cardUsageButton,
               selectedCardUsage.includes('online') && styles.cardUsageButtonSelected,
             ]}
-            onPress={() => toggleCardUsage('online')}
+            onPress={() => dispatch(toggleCardUsage('online'))}
             activeOpacity={0.8}>
             <Ionicons
               name="cart"
@@ -78,7 +136,7 @@ export default function ApplyCardScreen() {
               styles.cardUsageButton,
               selectedCardUsage.includes('overseas') && styles.cardUsageButtonSelected,
             ]}
-            onPress={() => toggleCardUsage('overseas')}
+            onPress={() => dispatch(toggleCardUsage('overseas'))}
             activeOpacity={0.8}>
             <Ionicons
               name="globe"
@@ -111,7 +169,7 @@ export default function ApplyCardScreen() {
             <TouchableOpacity
               key={purpose}
               style={styles.purposeOption}
-              onPress={() => togglePurpose(purpose)}
+              onPress={() => dispatch(togglePurpose(purpose))}
               activeOpacity={0.7}>
               <View
                 style={[
@@ -134,23 +192,34 @@ export default function ApplyCardScreen() {
               placeholder="Please Specify"
               placeholderTextColor="#999"
               value={otherPurpose}
-              onChangeText={setOtherPurpose}
+              onChangeText={(text) => dispatch(setOtherPurpose(text))}
             />
           </View>
         )}
       </View>
 
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={styles.nextButton}
+          style={[styles.nextButton, isLoading && styles.nextButtonDisabled]}
           onPress={handleNext}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+          disabled={isLoading}>
           <LinearGradient
-            colors={['#FF6B35', '#F7931E']}
+            colors={isLoading ? ['#ccc', '#999'] : ['#FF6B35', '#F7931E']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.nextButtonGradient}>
-            <Text style={styles.nextButtonText}>NEXT</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.nextButtonText}>NEXT</Text>
+            )}
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -300,6 +369,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 1,
+  },
+  nextButtonDisabled: {
+    opacity: 0.6,
+  },
+  errorContainer: {
+    paddingHorizontal: 24,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    color: '#E91E63',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
